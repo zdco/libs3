@@ -88,6 +88,11 @@ int base64Encode(const unsigned char *in, int inLen, char *out);
 void HMAC_SHA1(unsigned char hmac[20], const unsigned char *key, int key_len,
                const unsigned char *message, int message_len);
 
+// Compute HMAC-SHA-256 with key [key] and message [message], storing result
+// in [hmac]
+void HMAC_SHA256(unsigned char hmac[32], const unsigned char *key, int key_len,
+                 const unsigned char *message, int message_len);
+
 // Compute a 64-bit hash values given a set of bytes
 uint64_t hash(const unsigned char *k, int length);
 
