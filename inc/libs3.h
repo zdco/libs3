@@ -412,6 +412,19 @@ typedef enum
     S3UriStylePath                      = 1
 } S3UriStyle;
 
+/**
+ * S3Signature represents a version that may be used for communicating a
+ * request to the Amazon S3 service.
+ *
+ * S3SignatureV2 hmac-sha1
+ * S3SignatureV4 hmac-sha256
+ **/
+typedef enum
+{
+    S3SignatureV2                     = 0,
+    S3SignatureV4                      = 1
+} S3SignatureVersion;
+
 
 /**
  * S3GranteeType defines the type of Grantee used in an S3 ACL Grant.
@@ -685,6 +698,11 @@ typedef struct S3BucketContext
      * this bucket context
      **/
     S3UriStyle uriStyle;
+
+     /**
+     * The signature version to use when accessing the bucket
+     **/
+    S3SignatureVersion signVersion;
 
     /**
      * The Amazon Access Key ID to use for access to the bucket
@@ -1624,6 +1642,7 @@ S3Status S3_generate_authenticated_query_string
  * Lists all S3 buckets belonging to the access key id.
  *
  * @param protocol gives the protocol to use for this request
+ * @param signVersion gives the signature version to use for this request
  * @param accessKeyId gives the Amazon Access Key ID for which to list owned
  *        buckets
  * @param secretAccessKey gives the Amazon Secret Access Key for which to list
@@ -1640,7 +1659,7 @@ S3Status S3_generate_authenticated_query_string
  * @param callbackData will be passed in as the callbackData parameter to
  *        all callbacks for this request
  **/
-void S3_list_service(S3Protocol protocol, const char *accessKeyId,
+void S3_list_service(S3Protocol protocol, S3SignatureVersion signVersion, const char *accessKeyId,
                      const char *secretAccessKey, const char *securityToken,
                      const char *hostName, S3RequestContext *requestContext,
                      const S3ListServiceHandler *handler,
@@ -1656,6 +1675,7 @@ void S3_list_service(S3Protocol protocol, const char *accessKeyId,
  *
  * @param protocol gives the protocol to use for this request
  * @param uriStyle gives the URI style to use for this request
+ * @param signVersion gives the signature version to use for this request
  * @param accessKeyId gives the Amazon Access Key ID for which to list owned
  *        buckets
  * @param secretAccessKey gives the Amazon Secret Access Key for which to list
@@ -1682,7 +1702,7 @@ void S3_list_service(S3Protocol protocol, const char *accessKeyId,
  * @param callbackData will be passed in as the callbackData parameter to
  *        all callbacks for this request
  **/
-void S3_test_bucket(S3Protocol protocol, S3UriStyle uriStyle,
+void S3_test_bucket(S3Protocol protocol, S3UriStyle uriStyle, S3SignatureVersion signVersion,
                     const char *accessKeyId, const char *secretAccessKey,
                     const char *securityToken, const char *hostName, 
                     const char *bucketName, int locationConstraintReturnSize,
@@ -1695,6 +1715,7 @@ void S3_test_bucket(S3Protocol protocol, S3UriStyle uriStyle,
  * Creates a new bucket.
  *
  * @param protocol gives the protocol to use for this request
+ * @param signVersion gives the signature version to use for this request
  * @param accessKeyId gives the Amazon Access Key ID for which to list owned
  *        buckets
  * @param secretAccessKey gives the Amazon Secret Access Key for which to list
@@ -1715,7 +1736,7 @@ void S3_test_bucket(S3Protocol protocol, S3UriStyle uriStyle,
  * @param callbackData will be passed in as the callbackData parameter to
  *        all callbacks for this request
  **/
-void S3_create_bucket(S3Protocol protocol, const char *accessKeyId,
+void S3_create_bucket(S3Protocol protocol, S3SignatureVersion signVersion, const char *accessKeyId,
                       const char *secretAccessKey, const char *securityToken,
                       const char *hostName, const char *bucketName,
                       S3CannedAcl cannedAcl, const char *locationConstraint,
@@ -1729,6 +1750,7 @@ void S3_create_bucket(S3Protocol protocol, const char *accessKeyId,
  *
  * @param protocol gives the protocol to use for this request
  * @param uriStyle gives the URI style to use for this request
+ * @param signVersion gives the signature version to use for this request
  * @param accessKeyId gives the Amazon Access Key ID for which to list owned
  *        buckets
  * @param secretAccessKey gives the Amazon Secret Access Key for which to list
@@ -1746,7 +1768,7 @@ void S3_create_bucket(S3Protocol protocol, const char *accessKeyId,
  * @param callbackData will be passed in as the callbackData parameter to
  *        all callbacks for this request
  **/
-void S3_delete_bucket(S3Protocol protocol, S3UriStyle uriStyle,
+void S3_delete_bucket(S3Protocol protocol, S3UriStyle uriStyle, S3SignatureVersion signVersion,
                       const char *accessKeyId, const char *secretAccessKey,
                       const char *securityToken, const char *hostName, 
                       const char *bucketName, S3RequestContext *requestContext,

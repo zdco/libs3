@@ -697,8 +697,8 @@ static const char *http_request_type_to_verb(HttpRequestType requestType)
 }
 
 
-// Composes the Authorization header for the request
-static S3Status compose_auth_header(const RequestParams *params,
+// Composes the sha1 Authorization header for the request
+static S3Status compose_sha1_auth_header(const RequestParams *params,
                                     RequestComputedValues *values)
 {
     // We allow for:
@@ -750,6 +750,81 @@ static S3Status compose_auth_header(const RequestParams *params,
              b64Len, b64);
 
     return S3StatusOK;
+}
+
+
+// Composes the sha256 Authorization header for the request 
+static S3Status compose_sha256_auth_header(const RequestParams *params,
+                                    RequestComputedValues *values)
+{
+    // We allow for:
+    // 17 bytes for HTTP-Verb + \n
+    // 129 bytes for Content-MD5 + \n
+    // 129 bytes for Content-Type + \n
+    // 1 byte for empty Date + \n
+    // CanonicalizedAmzHeaders & CanonicalizedResource
+    char signbuf[17 + 129 + 129 + 1 + 
+                 (sizeof(values->canonicalizedAmzHeaders) - 1) +
+                 (sizeof(values->canonicalizedResource) - 1) + 1];
+    int len = 0;
+
+#define signbuf_append(format, ...)                             \
+    len += snprintf(&(signbuf[len]), sizeof(signbuf) - len,     \
+                    format, __VA_ARGS__)
+
+    signbuf_append
+        ("%s\n", http_request_type_to_verb(params->httpRequestType));
+
+    // For MD5 and Content-Type, use the value in the actual header, because
+    // it's already been trimmed
+    signbuf_append("%s\n", values->md5Header[0] ? 
+                   &(values->md5Header[sizeof("Content-MD5: ") - 1]) : "");
+
+    signbuf_append
+        ("%s\n", values->contentTypeHeader[0] ? 
+         &(values->contentTypeHeader[sizeof("Content-Type: ") - 1]) : "");
+
+    signbuf_append("%s", "\n"); // Date - we always use x-amz-date
+
+    signbuf_append("%s", values->canonicalizedAmzHeaders);
+
+    signbuf_append("%s", values->canonicalizedResource);
+
+    // Generate an HMAC-SHA-1 of the signbuf
+    unsigned char hmac[20];
+
+    HMAC_SHA1(hmac, (unsigned char *) params->bucketContext.secretAccessKey,
+              strlen(params->bucketContext.secretAccessKey),
+              (unsigned char *) signbuf, len);
+
+    // Now base-64 encode the results
+    char b64[((20 + 1) * 4) / 3];
+    int b64Len = base64Encode(hmac, 20, b64);
+    
+    snprintf(values->authorizationHeader, sizeof(values->authorizationHeader),
+             "Authorization: AWS %s:%.*s", params->bucketContext.accessKeyId,
+             b64Len, b64);
+
+    return S3StatusOK;
+}
+
+
+// Composes the Authorization header for the request
+static S3Status compose_auth_header(const RequestParams *params,
+                                    RequestComputedValues *values)
+{
+    if (params->bucketContext.signVersion == S3SignatureV2)
+    {
+        return compose_sha1_auth_header(params, values);
+    }
+    else if (params->bucketContext.signVersion == S3SignatureV4)
+    {
+        return compose_sha256_auth_header(params, values);
+    }
+    else
+    {
+        return compose_sha1_auth_header(params, values);
+    }
 }
 
 
