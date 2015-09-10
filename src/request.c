@@ -914,7 +914,7 @@ static S3Status setup_curl(Request *request,
     append_standard_header(ifMatchHeader);
     append_standard_header(ifNoneMatchHeader);
     append_standard_header(rangeHeader);
-    append_standard_header(authorizationHeader);
+    //append_standard_header(authorizationHeader);
 
     // Append x-amz- headers
     int i;
