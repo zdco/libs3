@@ -130,7 +130,8 @@ static void completeCallback(S3Status requestStatus,
 }
 
 
-void S3_list_service(S3Protocol protocol, S3SignatureVersion signVersion, const char *accessKeyId,
+void S3_list_service(S3Protocol protocol, S3SignatureVersion signVersion, 
+                     const char *region, const char *accessKeyId,
                      const char *secretAccessKey, const char *securityToken,
                      const char *hostName, S3RequestContext *requestContext,
                      const S3ListServiceHandler *handler, void *callbackData)
@@ -166,6 +167,7 @@ void S3_list_service(S3Protocol protocol, S3SignatureVersion signVersion, const 
           protocol,                                   // protocol
           S3UriStylePath,                             // uriStyle
           signVersion,                             // signVersion
+          region,                             // region
           accessKeyId,                                // accessKeyId
           secretAccessKey,                            // secretAccessKey
           securityToken },                            // securityToken

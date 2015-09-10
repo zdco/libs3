@@ -47,6 +47,7 @@ void S3_put_object(const S3BucketContext *bucketContext, const char *key,
           bucketContext->protocol,                    // protocol
           bucketContext->uriStyle,                    // uriStyle
           bucketContext->signVersion,                    // signVersion
+          bucketContext->region,                    // region
           bucketContext->accessKeyId,                 // accessKeyId
           bucketContext->secretAccessKey,             // secretAccessKey
           bucketContext->securityToken },             // securityToken
@@ -208,6 +209,7 @@ void S3_copy_object(const S3BucketContext *bucketContext, const char *key,
           bucketContext->protocol,                    // protocol
           bucketContext->uriStyle,                    // uriStyle
           bucketContext->signVersion,                    // signVersion
+          bucketContext->region,                    // region
           bucketContext->accessKeyId,                 // accessKeyId
           bucketContext->secretAccessKey,             // secretAccessKey
           bucketContext->securityToken },             // securityToken
@@ -250,6 +252,7 @@ void S3_get_object(const S3BucketContext *bucketContext, const char *key,
           bucketContext->protocol,                    // protocol
           bucketContext->uriStyle,                    // uriStyle
           bucketContext->signVersion,                    // signVersion
+          bucketContext->region,                    // region
           bucketContext->accessKeyId,                 // accessKeyId
           bucketContext->secretAccessKey,             // secretAccessKey
           bucketContext->securityToken },             // securityToken
@@ -290,6 +293,7 @@ void S3_head_object(const S3BucketContext *bucketContext, const char *key,
           bucketContext->protocol,                    // protocol
           bucketContext->uriStyle,                    // uriStyle
           bucketContext->signVersion,                    // signVersion
+          bucketContext->region,                    // region
           bucketContext->accessKeyId,                 // accessKeyId
           bucketContext->secretAccessKey,             // secretAccessKey
           bucketContext->securityToken },             // securityToken
@@ -330,6 +334,7 @@ void S3_delete_object(const S3BucketContext *bucketContext, const char *key,
           bucketContext->protocol,                    // protocol
           bucketContext->uriStyle,                    // uriStyle
           bucketContext->signVersion,                    // signVersion
+          bucketContext->region,                    // region
           bucketContext->accessKeyId,                 // accessKeyId
           bucketContext->secretAccessKey,             // secretAccessKey
           bucketContext->securityToken },             // securityToken

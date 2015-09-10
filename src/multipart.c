@@ -111,6 +111,7 @@ void S3_initiate_multipart(S3BucketContext *bucketContext, const char *key,
           bucketContext->protocol,                    // protocol
           bucketContext->uriStyle,                  // uriStyle
           bucketContext->signVersion,                    // signVersion
+          bucketContext->region,                    // region
           bucketContext->accessKeyId,                 // accessKeyId
           bucketContext->secretAccessKey,             //secretAccessKey    
           bucketContext->securityToken },           // secretToken
@@ -152,6 +153,7 @@ void S3_abort_multipart_upload(S3BucketContext *bucketContext, const char* key,
           bucketContext->protocol,                    // protocol
           bucketContext->uriStyle,                  // uriStyle
           bucketContext->signVersion,                    // signVersion
+          bucketContext->region,                    // region
           bucketContext->accessKeyId,                 // accessKeyId
           bucketContext->secretAccessKey,             //secretAccessKey    
           bucketContext->securityToken },           // secretToken
@@ -202,6 +204,7 @@ void S3_upload_part(S3BucketContext *bucketContext, const char *key,
           bucketContext->protocol,                    // protocol
           bucketContext->uriStyle,                    // uriStyle
           bucketContext->signVersion,                    // signVersion
+          bucketContext->region,                    // region
           bucketContext->accessKeyId,                 // accessKeyId
           bucketContext->secretAccessKey,              //secretAccessKey    
           bucketContext->securityToken },           // secretToken
@@ -330,6 +333,7 @@ void S3_complete_multipart_upload(S3BucketContext *bucketContext, const char *ke
           bucketContext->protocol,                    // protocol
           bucketContext->uriStyle,                    // uriStyle
           bucketContext->signVersion,                    // signVersion
+          bucketContext->region,                    // region
           bucketContext->accessKeyId,                 // accessKeyId
           bucketContext->secretAccessKey,              //secretAccessKey    
           bucketContext->securityToken },           // secretToken
@@ -919,6 +923,7 @@ void S3_list_multipart_uploads(S3BucketContext *bucketContext, const char *prefi
               bucketContext->protocol,                    // protocol
               bucketContext->uriStyle,                    // uriStyle
               bucketContext->signVersion,                    // signVersion
+              bucketContext->region,                    // region
               bucketContext->accessKeyId,                 // accessKeyId
               bucketContext->secretAccessKey,             // secretAccessKey
               bucketContext->securityToken },             // securityToken
@@ -1044,6 +1049,7 @@ void S3_list_parts(S3BucketContext *bucketContext, const char *key,
               bucketContext->protocol,                    // protocol
               bucketContext->uriStyle,                    // uriStyle
               bucketContext->signVersion,                    // signVersion
+              bucketContext->region,                    // region
               bucketContext->accessKeyId,                 // accessKeyId
               bucketContext->secretAccessKey,             // secretAccessKey
               bucketContext->securityToken },             // securityToken

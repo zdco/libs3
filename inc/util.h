@@ -93,6 +93,12 @@ void HMAC_SHA1(unsigned char hmac[20], const unsigned char *key, int key_len,
 void HMAC_SHA256(unsigned char hmac[32], const unsigned char *key, int key_len,
                  const unsigned char *message, int message_len);
 
+// Compute SHA-256 with key [key], storing result in [hash]
+void SHA256Hash(unsigned char sha256[32], const unsigned char *key, int key_len);
+
+// Compute lowercase base 16 encoding
+void Hex(unsigned char hex[], const unsigned char *key, int key_len);
+
 // Compute a 64-bit hash values given a set of bytes
 uint64_t hash(const unsigned char *k, int length);
 

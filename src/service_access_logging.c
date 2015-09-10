@@ -328,6 +328,7 @@ void S3_get_server_access_logging(const S3BucketContext *bucketContext,
           bucketContext->protocol,                    // protocol
           bucketContext->uriStyle,                    // uriStyle
           bucketContext->signVersion,                    // signVersion
+          bucketContext->region,                    // region
           bucketContext->accessKeyId,                 // accessKeyId
           bucketContext->secretAccessKey,             // secretAccessKey
           bucketContext->securityToken },             // securityToken
@@ -534,6 +535,7 @@ void S3_set_server_access_logging(const S3BucketContext *bucketContext,
           bucketContext->protocol,                    // protocol
           bucketContext->uriStyle,                    // uriStyle
           bucketContext->signVersion,                    // signVersion
+          bucketContext->region,                    // region
           bucketContext->accessKeyId,                 // accessKeyId
           bucketContext->secretAccessKey,             // secretAccessKey
           bucketContext->securityToken },             // securityToken
