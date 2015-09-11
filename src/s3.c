@@ -61,7 +61,7 @@ extern int putenv(char *);
 static int forceG = 0;
 static int showResponsePropertiesG = 0;
 static S3Protocol protocolG = S3ProtocolHTTPS;
-static S3SignatureVersion signVersionV2 = S3SignatureV2;
+static S3SignatureVersion signVersion = S3SignatureV4;
 static S3UriStyle uriStyleG = S3UriStylePath;
 static int retriesG = 5;
 
@@ -911,7 +911,7 @@ static void list_service(int allDetails)
     };
 
     do {
-        S3_list_service(protocolG, signVersionV2, 0, accessKeyIdG, secretAccessKeyG, 0, 0, 0, 
+        S3_list_service(protocolG, signVersion, 0, accessKeyIdG, secretAccessKeyG, 0, 0, 0, 
                         &listServiceHandler, &data);
     } while (S3_status_is_retryable(statusG) && should_retry());
 
@@ -954,7 +954,7 @@ static void test_bucket(int argc, char **argv, int optindex)
 
     char locationConstraint[64];
     do {
-        S3_test_bucket(protocolG, uriStyleG, signVersionV2, 0, accessKeyIdG, secretAccessKeyG, 0,
+        S3_test_bucket(protocolG, uriStyleG, signVersion, 0, accessKeyIdG, secretAccessKeyG, 0,
                        0, bucketName, sizeof(locationConstraint),
                        locationConstraint, 0, &responseHandler, 0);
     } while (S3_status_is_retryable(statusG) && should_retry());
@@ -1053,7 +1053,7 @@ static void create_bucket(int argc, char **argv, int optindex)
     };
 
     do {
-        S3_create_bucket(protocolG, signVersionV2, 0, accessKeyIdG, secretAccessKeyG, 0,
+        S3_create_bucket(protocolG, signVersion, 0, accessKeyIdG, secretAccessKeyG, 0,
                          0, bucketName, cannedAcl, locationConstraint, 0,
                          &responseHandler, 0);
     } while (S3_status_is_retryable(statusG) && should_retry());
@@ -1093,7 +1093,7 @@ static void delete_bucket(int argc, char **argv, int optindex)
     };
 
     do {
-        S3_delete_bucket(protocolG, uriStyleG, signVersionV2, 0, accessKeyIdG, secretAccessKeyG,
+        S3_delete_bucket(protocolG, uriStyleG, signVersion, 0, accessKeyIdG, secretAccessKeyG,
                          0, 0, bucketName, 0, &responseHandler, 0);
     } while (S3_status_is_retryable(statusG) && should_retry());
 
@@ -1249,8 +1249,8 @@ static void list_bucket(const char *bucketName, const char *prefix,
         bucketName,
         protocolG,
         uriStyleG,
-        signVersionV2,
-        0,
+        signVersion,
+        "eu-central-1",
         accessKeyIdG,
         secretAccessKeyG,
         0
@@ -1685,7 +1685,7 @@ static void list_multipart_uploads(int argc, char **argv, int optindex)
             bucketName,
             protocolG,
             uriStyleG,
-            signVersionV2,
+            signVersion,
             0,
             accessKeyIdG,
             secretAccessKeyG,
@@ -1804,7 +1804,7 @@ static void list_parts(int argc, char **argv, int optindex)
             bucketName,
             protocolG,
             uriStyleG,
-            signVersionV2,
+            signVersion,
             0,
             accessKeyIdG,
             secretAccessKeyG,
@@ -1902,7 +1902,7 @@ static void abort_multipart_upload(int argc, char **argv, int optindex)
             bucketName,
             protocolG,
             uriStyleG,
-            signVersionV2,
+            signVersion,
             0,
             accessKeyIdG,
             secretAccessKeyG,
@@ -1972,7 +1972,7 @@ static void delete_object(int argc, char **argv, int optindex)
         bucketName,
         protocolG,
         uriStyleG,
-        signVersionV2,
+        signVersion,
         0,
         accessKeyIdG,
         secretAccessKeyG,
@@ -2095,7 +2095,7 @@ static int try_get_parts_info(const char *bucketName, const char *key,
         bucketName,
         protocolG,
         uriStyleG,
-        signVersionV2,
+        signVersion,
         0,
         accessKeyIdG,
         secretAccessKeyG,
@@ -2350,7 +2350,7 @@ static void put_object(int argc, char **argv, int optindex)
         bucketName,
         protocolG,
         uriStyleG,
-        signVersionV2,
+        signVersion,
         0,
         accessKeyIdG,
         secretAccessKeyG,
@@ -2663,7 +2663,7 @@ static void copy_object(int argc, char **argv, int optindex)
         sourceBucketName,
         protocolG,
         uriStyleG,
-        signVersionV2,
+        signVersion,
         0,
         accessKeyIdG,
         secretAccessKeyG,
@@ -2847,7 +2847,7 @@ static void get_object(int argc, char **argv, int optindex)
         bucketName,
         protocolG,
         uriStyleG,
-        signVersionV2,
+        signVersion,
         0,
         accessKeyIdG,
         secretAccessKeyG,
@@ -2924,7 +2924,7 @@ static void head_object(int argc, char **argv, int optindex)
         bucketName,
         protocolG,
         uriStyleG,
-        signVersionV2,
+        signVersion,
         0,
         accessKeyIdG,
         secretAccessKeyG,
@@ -3006,7 +3006,7 @@ static void generate_query_string(int argc, char **argv, int optindex)
         bucketName,
         protocolG,
         uriStyleG,
-        signVersionV2,
+        signVersion,
         0,
         accessKeyIdG,
         secretAccessKeyG,
@@ -3111,7 +3111,7 @@ void get_acl(int argc, char **argv, int optindex)
         bucketName,
         protocolG,
         uriStyleG,
-        signVersionV2,
+        signVersion,
         0,
         accessKeyIdG,
         secretAccessKeyG,
@@ -3277,7 +3277,7 @@ void set_acl(int argc, char **argv, int optindex)
         bucketName,
         protocolG,
         uriStyleG,
-        signVersionV2,
+        signVersion,
         0,
         accessKeyIdG,
         secretAccessKeyG,
@@ -3372,7 +3372,7 @@ void get_logging(int argc, char **argv, int optindex)
         bucketName,
         protocolG,
         uriStyleG,
-        signVersionV2,
+        signVersion,
         0,
         accessKeyIdG,
         secretAccessKeyG,
@@ -3541,7 +3541,7 @@ void set_logging(int argc, char **argv, int optindex)
         bucketName,
         protocolG,
         uriStyleG,
-        signVersionV2,
+        signVersion,
         0,
         accessKeyIdG,
         secretAccessKeyG,

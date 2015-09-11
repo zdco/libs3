@@ -355,13 +355,14 @@ static S3Status compose_amz_headers(const RequestParams *params,
     time_t now = time(NULL);
     if (params->bucketContext.signVersion == S3SignatureV4)
     {
-        strftime(values->amzHeaderDate, sizeof(values->amzHeaderDate), "%Y%m%dT%H:%M:%SZ", gmtime(&now));
+        strftime(values->amzHeaderDate, sizeof(values->amzHeaderDate), "%Y%m%dT%H%M%SZ", gmtime(&now));
     }
     else
     {
         strftime(values->amzHeaderDate, sizeof(values->amzHeaderDate), "%a, %d %b %Y %H:%M:%S GMT", gmtime(&now));
     }
     headers_append(1, "x-amz-date: %s", values->amzHeaderDate);
+    headers_append(1, "x-amz-content-sha256: %s", "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855");
 
     if (params->httpRequestType == HttpRequestTypeCOPY) {
         // Add the x-amz-copy-source header
@@ -708,19 +709,21 @@ static void compose_scope_and_signed_header(const RequestParams *params,
                                          RequestComputedValues *values)
 {
     char date[9];
-    snprintf(date, 8, "%s", values->amzHeaderDate);
+    snprintf(date, sizeof(date), "%s", values->amzHeaderDate);
+    const char *region = params->bucketContext.region ? params->bucketContext.region : S3_DEFAULT_REGION;
     snprintf(values->credentialScope, sizeof(values->credentialScope), 
-        "%s/%s/s3/aws4_request", date, params->bucketContext.region);
+        "%s/%s/s3/aws4_request", date, region);
 
     int len = 0;
 #define signedHeaders_append(format, ...)                             \
     len += snprintf(&(values->signedHeaders[len]), sizeof(values->signedHeaders) - len,     \
                     format, __VA_ARGS__)
-    if (values->contentTypeHeader[0])
-    {
+    if (values->contentTypeHeader[0]) {
         signedHeaders_append("%s", "content-type;"); //SignedHeaders
     }
     signedHeaders_append("host;%s", values->canonicalizedAmzSignedHeaders); //AMZ SignedHeaders
+    //printf("--amzHeaderDate--\n%s\n\n--date--\n%s\n\n--credentialScope--\n%s\n\n--region--\n%s\n\n--signedHeaders--\n%s\n\n", 
+    //    values->amzHeaderDate, date, values->credentialScope, region, values->signedHeaders);
 }
 
 // Convert an HttpRequestType to an HTTP Verb string
@@ -802,86 +805,101 @@ static S3Status compose_sha1_auth_header(const RequestParams *params,
 static void hash_canonical_request(unsigned char hashedCanonicalRequest[], const RequestParams *params,
                                     RequestComputedValues *values)
 {
-	// CanonicalRequest = HTTPRequestMethod + '\n' + CanonicalURI + '\n' + CanonicalQueryString + '\n' + 
-	// CanonicalHeaders + '\n' + SignedHeaders + '\n' + HexEncode(Hash(RequestPayload))
-	char canonicalRequest[17 + 129 + 129 + (sizeof(values->canonicalizedAmzHeaders) - 1) + 129 + 65];
-	int canonicalRequestLen = 0;
-#define canonicalRequest_append(format, ...)							\
-	canonicalRequestLen += snprintf(&(canonicalRequest[canonicalRequestLen]), sizeof(canonicalRequest) - canonicalRequestLen,	\
-				format, __VA_ARGS__)
+    //printf("key:%s,queryParams:%s,subResource:%s,copySourceBucketName:%s,copySourceKey:%s", 
+    //  params->key, params->queryParams, params->subResource, params->copySourceBucketName, params->copySourceKey);
+    // CanonicalRequest = HTTPRequestMethod + '\n' + CanonicalURI + '\n' + CanonicalQueryString + '\n' + 
+    // CanonicalHeaders + '\n' + SignedHeaders + '\n' + HexEncode(Hash(RequestPayload))
+    char canonicalRequest[17 + 129 + 129 + (sizeof(values->canonicalizedAmzHeaders) - 1) + 129 + 65];
+    int canonicalRequestLen = 0;
+#define canonicalRequest_append(format, ...)                            \
+    canonicalRequestLen += snprintf(&(canonicalRequest[canonicalRequestLen]), sizeof(canonicalRequest) - canonicalRequestLen,   \
+                format, __VA_ARGS__)
 
-	canonicalRequest_append("%s\n", http_request_type_to_verb(params->httpRequestType)); //HTTPRequestMethod
-	canonicalRequest_append("/%s\n", (values->urlEncodedKey && values->urlEncodedKey[0]) ? values->urlEncodedKey : ""); //CanonicalURI
-	if (params->subResource && params->subResource[0])
-	{
-		canonicalRequest_append("%s=\n", params->subResource); //CanonicalQueryString
-	}
-	else if (params->queryParams && params->queryParams[0])
-	{
-		canonicalRequest_append("%s\n", params->queryParams); //CanonicalQueryString, must be sorted by key name
-	}
+    canonicalRequest_append("%s\n", http_request_type_to_verb(params->httpRequestType)); //HTTPRequestMethod
+    if (params->bucketContext.uriStyle == S3UriStylePath) {
+        canonicalRequest_append("/%s", params->bucketContext.bucketName); //CanonicalURI
+    }
+    canonicalRequest_append("/%s\n", (values->urlEncodedKey && values->urlEncodedKey[0]) ? values->urlEncodedKey : ""); //CanonicalURI
+    if (params->subResource && params->subResource[0]) {
+        printf("params->subResource:%s\n", params->subResource);
+        canonicalRequest_append("%s=\n", params->subResource); //CanonicalQueryString
+    }
+    else if (params->queryParams && params->queryParams[0]) {
+        printf("params->queryParams:%s\n", params->queryParams);
+        canonicalRequest_append("%s\n", params->queryParams); //CanonicalQueryString, must be sorted by key name
+    }
+    canonicalRequest_append("%s", "\n"); //CanonicalQueryString, must be sorted by key name
 
-	if (values->contentTypeHeader[0])
-	{
-		canonicalRequest_append("content-type:%s\n", &(values->contentTypeHeader[sizeof("Content-Type: ") - 1])); //CanonicalHeaders
-	}
-	canonicalRequest_append("host:%s\n", params->bucketContext.hostName ? params->bucketContext.hostName : S3_DEFAULT_HOSTNAME); //CanonicalHeaders
-	canonicalRequest_append("%s\n", values->canonicalizedAmzHeaders); //AMZ CanonicalHeaders
-	canonicalRequest_append("%s\n", values->signedHeaders); //SignedHeaders
-	canonicalRequest_append("%s", "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"); //Empty hashed payload
+    if (values->contentTypeHeader[0]) {
+        canonicalRequest_append("content-type:%s\n", &(values->contentTypeHeader[sizeof("Content-Type: ") - 1])); //CanonicalHeaders
+    }
+    canonicalRequest_append("host:%s\n", params->bucketContext.hostName ? params->bucketContext.hostName : defaultHostNameG); //CanonicalHeaders
+    canonicalRequest_append("%s\n", values->canonicalizedAmzHeaders); //AMZ CanonicalHeaders
+    canonicalRequest_append("%s\n", values->signedHeaders); //SignedHeaders
+    canonicalRequest_append("%s", "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"); //Empty hashed payload
 
-	unsigned char sha256Request[32];
-	SHA256Hash(sha256Request, (unsigned char *) canonicalRequest, strlen(canonicalRequest));
+    unsigned char sha256Request[32];
+    SHA256Hash(sha256Request, (unsigned char *) canonicalRequest, strlen(canonicalRequest));
 
-	Hex(hashedCanonicalRequest, sha256Request, 32); //Lowercase base 16 encoding	
+    Hex(hashedCanonicalRequest, 65, sha256Request, 32); //Lowercase base 16 encoding    
+
+    printf("--canonicalRequest--\n%s\n\n--hashedCanonicalRequest--\n%s\n\n", 
+        canonicalRequest, hashedCanonicalRequest);
 }
 
 // Composes the sha256 Authorization header for the request 
 static S3Status compose_sha256_auth_header(const RequestParams *params,
                                     RequestComputedValues *values)
 {
-	// Hash Canonical Request
-	unsigned char hashedCanonicalRequest[64];
-	hash_canonical_request(hashedCanonicalRequest, params, values);
-	
-	// String to sign
-	// StringToSign = Algorithm + '\n' + RequestDate + '\n' + CredentialScope + '\n' + HashedCanonicalRequest))
-	char strToSign[17 + 17 + 129 + 65];	
-	int strToSignLen = 0;
-#define strToSign_append(format, ...) 							\
-	strToSignLen += snprintf(&(strToSign[strToSignLen]), sizeof(strToSign) - strToSignLen, 	\
-				format, __VA_ARGS__)
-	strToSign_append("%s\n", "AWS4-HMAC-SHA256"); //Algorithm
-	strToSign_append("%s\n", values->amzHeaderDate); //RequestDate
-	strToSign_append("%s\n", values->credentialScope); //CredentialScope
-	strToSign_append("%.*s", 64, hashedCanonicalRequest); //HashedCanonicalRequest
+    // Hash Canonical Request
+    unsigned char hashedCanonicalRequest[65];
+    hash_canonical_request(hashedCanonicalRequest, params, values);
+    
+    //printf("--hashedCanonicalRequest--\n%s\n\n", hashedCanonicalRequest);
+    
+    // String to sign
+    // StringToSign = Algorithm + '\n' + RequestDate + '\n' + CredentialScope + '\n' + HashedCanonicalRequest))
+    char strToSign[17 + 17 + 129 + 65]; 
+    int strToSignLen = 0;
+#define strToSign_append(format, ...)                           \
+    strToSignLen += snprintf(&(strToSign[strToSignLen]), sizeof(strToSign) - strToSignLen,  \
+                format, __VA_ARGS__)
+    strToSign_append("%s\n", "AWS4-HMAC-SHA256"); //Algorithm
+    strToSign_append("%s\n", values->amzHeaderDate); //RequestDate
+    strToSign_append("%s\n", values->credentialScope); //CredentialScope
+    strToSign_append("%.*s", 64, hashedCanonicalRequest); //HashedCanonicalRequest
+    printf("--StringToSign--\n%s\n\n", strToSign);
 
-	
-	// Signing key
-	// SigningKey = HMAC(HMAC(HMAC(HMAC("AWS4" + kSecret,"20110909"),"us-east-1"),"iam"),"aws4_request")
-	unsigned char signingKey[32];
-	char aws4SecretKey[128];
-	snprintf(aws4SecretKey, sizeof(aws4SecretKey), "AWS4%s", params->bucketContext.secretAccessKey);
-	HMAC_SHA256(signingKey, (unsigned char *) aws4SecretKey, strlen(aws4SecretKey), 
-		(unsigned char *) values->amzHeaderDate, 8); //only date
-	const char *region = params->bucketContext.region ? params->bucketContext.region : S3_DEFAULT_REGION;
-	HMAC_SHA256(signingKey, (unsigned char *) signingKey, 32, (unsigned char *) region, strlen(region));
-	HMAC_SHA256(signingKey, (unsigned char *) signingKey, 32, (unsigned char *) "s3", strlen("s3"));
-	HMAC_SHA256(signingKey, (unsigned char *) signingKey, 32, (unsigned char *) "aws4_request", strlen("aws4_request"));
-	
-	// Signature
-	// Signature = HMAC-SHA256(SigningKey, StringToSign)
-	unsigned char signature[32];
-	HMAC_SHA256(signature, (unsigned char *) signingKey, 32, (unsigned char *) strToSign, strToSignLen);
+    
+    // Signing key
+    // SigningKey = HMAC(HMAC(HMAC(HMAC("AWS4" + kSecret,"20110909"),"us-east-1"),"iam"),"aws4_request")
+    unsigned char signingKey[32];
+    char aws4SecretKey[128];
+    snprintf(aws4SecretKey, sizeof(aws4SecretKey), "AWS4%s", params->bucketContext.secretAccessKey);
+    HMAC_SHA256(signingKey, (unsigned char *) aws4SecretKey, strlen(aws4SecretKey), 
+        (unsigned char *) values->amzHeaderDate, 8); //only date
+    const char *region = params->bucketContext.region ? params->bucketContext.region : S3_DEFAULT_REGION;
+    HMAC_SHA256(signingKey, (unsigned char *) signingKey, 32, (unsigned char *) region, strlen(region));
+    HMAC_SHA256(signingKey, (unsigned char *) signingKey, 32, (unsigned char *) "s3", strlen("s3"));
+    HMAC_SHA256(signingKey, (unsigned char *) signingKey, 32, (unsigned char *) "aws4_request", strlen("aws4_request"));
+    printf("--signingKey--\n%.*s\n\n", 32, signingKey);
+    
+    // Signature
+    // Signature = HMAC-SHA256(SigningKey, StringToSign)
+    unsigned char signature[32];
+    HMAC_SHA256(signature, (unsigned char *) signingKey, 32, (unsigned char *) strToSign, strToSignLen);
+    unsigned char hashedSignature[65];
+    Hex(hashedSignature, 65, signature, 32); //Lowercase base 16 encoding   
 
-	//Authorization: algorithm Credential=access key ID/credential scope, SignedHeaders=SignedHeaders, Signature=signature
-	//Authorization: AWS4-HMAC-SHA256 Credential=AKIDEXAMPLE/20110909/us-east-1/iam/aws4_request, 
-	//SignedHeaders=content-type;host;x-amz-date, Signature=ced6826de92d2bdeed8f846f0bf508e8559e98e4b0199114b84c54174deb456c
-	snprintf(values->authorizationHeader, sizeof(values->authorizationHeader),
-		"Authorization: AWS4-HMAC-SHA256 Credential=%s/%s, SignedHeaders=%s, Signature=%.*s", 
-		params->bucketContext.accessKeyId, values->credentialScope, values->signedHeaders, 32, signature);
-
-	return S3StatusOK;
+    //Authorization: algorithm Credential=access key ID/credential scope, SignedHeaders=SignedHeaders, Signature=signature
+    //Authorization: AWS4-HMAC-SHA256 Credential=AKIDEXAMPLE/20110909/us-east-1/iam/aws4_request, 
+    //SignedHeaders=content-type;host;x-amz-date, Signature=ced6826de92d2bdeed8f846f0bf508e8559e98e4b0199114b84c54174deb456c
+    snprintf(values->authorizationHeader, sizeof(values->authorizationHeader),
+        "Authorization: AWS4-HMAC-SHA256 Credential=%s/%s, SignedHeaders=%s, Signature=%s", 
+        params->bucketContext.accessKeyId, values->credentialScope, values->signedHeaders, hashedSignature);
+    printf("--authorizationHeader--\n%s\n\n", values->authorizationHeader);
+    
+    return S3StatusOK;
 }
 
 

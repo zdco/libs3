@@ -655,14 +655,11 @@ void SHA256Hash(unsigned char sha256[32], const unsigned char *key, int key_len)
     SHA256_final(sha256, &context);
 }
 
-void Hex(unsigned char hex[], const unsigned char *key, int key_len)
+void Hex(unsigned char *hex, int hex_len, const unsigned char *key, int key_len)
 {
-    int hexLen = 0, i;
-#define hex_append(format, ...)                         \
-    hexLen += snprintf((char *) &(hex[hexLen]), sizeof(hex) - hexLen,    \
-                format, __VA_ARGS__)
+    int nLen = 0, i;
     for (i = 0; i < key_len; i++) {
-        hex_append("%02x", key[i]);
+        nLen += snprintf((char *)&hex[nLen], hex_len - nLen, "%02x", key[i]);
     }
 }
 
