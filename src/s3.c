@@ -164,8 +164,9 @@ static void S3_init()
 {
     S3Status status;
     const char *hostname = getenv("S3_HOSTNAME");
+    const char *region = getenv("S3_REGION");
     
-    if ((status = S3_initialize("s3", S3_INIT_ALL, hostname))
+    if ((status = S3_initialize("s3", S3_INIT_ALL, region, hostname))
         != S3StatusOK) {
         fprintf(stderr, "Failed to initialize libs3: %s\n", 
                 S3_get_status_name(status));
@@ -206,6 +207,7 @@ static void usageExit(FILE *out)
 "   S3_ACCESS_KEY_ID     : S3 access key ID (required)\n"
 "   S3_SECRET_ACCESS_KEY : S3 secret access key (required)\n"
 "   S3_HOSTNAME          : specify alternative S3 host (optional)\n"
+"   S3_REGION          : specify alternative S3 region (optional)\n"
 "\n" 
 " Commands (with <required parameters> and [optional parameters]) :\n"
 "\n"
@@ -1250,7 +1252,7 @@ static void list_bucket(const char *bucketName, const char *prefix,
         protocolG,
         uriStyleG,
         signVersion,
-        "eu-central-1",
+        0,
         accessKeyIdG,
         secretAccessKeyG,
         0

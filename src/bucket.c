@@ -688,7 +688,7 @@ void S3_list_bucket(const S3BucketContext *bucketContext, const char *prefix,
         safe_append("prefix", prefix);
     }
     if (marker) {
-        safe_append("marker", marker);
+        //safe_append("marker", marker);
     }
     if (delimiter) {
         safe_append("delimiter", delimiter);

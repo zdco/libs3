@@ -68,8 +68,7 @@ int urlEncode(char *dest, const char *src, int maxSrcSize)
         unsigned char c = *src;
         if (isalnum(c) ||
             (c == '-') || (c == '_') || (c == '.') || (c == '!') || 
-            (c == '~') || (c == '*') || (c == '\'') || (c == '(') ||
-            (c == ')') || (c == '/')) {
+            (c == '~') || (c == '*') || (c == '\'')  || (c == '/')) {
             *dest++ = c;
         }
         else if (*src == ' ') {

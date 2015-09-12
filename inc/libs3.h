@@ -125,6 +125,10 @@ extern "C" {
  **/
 #define S3_DEFAULT_HOSTNAME                "s3.amazonaws.com"
 
+/**
+ * S3_MAX_REGION_SIZE is the maximum size we allow for a region
+ **/
+#define S3_MAX_REGION_SIZE               64
 
 /**
  * This is the default region that is being used for the S3 requests
@@ -207,6 +211,11 @@ extern "C" {
      sizeof("?AWSAccessKeyId=") + 32 + sizeof("&Expires=") + 32 + \
      sizeof("&Signature=") + 28 + 1)
 
+#define S3_MAX_SHA256_AUTH_QUERY_STRING_SIZE \
+    (sizeof("https:///") + S3_MAX_HOSTNAME_SIZE + (S3_MAX_KEY_SIZE * 3) + \
+     sizeof("?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=")  + 128 + sizeof("&X-Amz-Date=")  + 20 + \
+     sizeof("&X-Amz-Expires=") + 32 + sizeof("&X-Amz-SignedHeaders=") + 256 + \
+     sizeof("&X-Amz-Signature=") + 64 + 1)
 
 /**
  * This constant is used by the S3_initialize() function, to specify that
@@ -1367,6 +1376,10 @@ typedef struct S3AbortMultipartUploadHandler
  *        all necessary initialization; however, be warned that things may
  *        break if your application re-initializes the dependent libraries
  *        later.
+ * @param defaultS3Region is a string the specifies the default S3 server
+ *        region to use when making S3 requests; this value is used
+ *        whenever the region of an S3BucketContext is NULL.  If NULL is
+ *        passed here then the default of S3_DEFAULT_REGION will be used.
  * @param defaultS3Hostname is a string the specifies the default S3 server
  *        hostname to use when making S3 requests; this value is used
  *        whenever the hostName of an S3BucketContext is NULL.  If NULL is
@@ -1380,7 +1393,7 @@ typedef struct S3AbortMultipartUploadHandler
  *         S3StatusOutOfMemory on failure due to out of memory
  **/
 S3Status S3_initialize(const char *userAgentInfo, int flags,
-                       const char *defaultS3HostName);
+                       const char *defaultS3Region, const char *defaultS3HostName);
 
 
 /**

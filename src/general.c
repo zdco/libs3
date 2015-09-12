@@ -33,13 +33,13 @@
 static int initializeCountG = 0;
 
 S3Status S3_initialize(const char *userAgentInfo, int flags,
-                       const char *defaultS3HostName)
+                       const char *defaultS3Region, const char *defaultS3HostName)
 {
     if (initializeCountG++) {
         return S3StatusOK;
     }
 
-    return request_api_initialize(userAgentInfo, flags, defaultS3HostName);
+    return request_api_initialize(userAgentInfo, flags, defaultS3Region, defaultS3HostName);
 }
 
 

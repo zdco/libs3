@@ -46,6 +46,8 @@ static Request *requestStackG[REQUEST_STACK_SIZE];
 
 static int requestStackCountG;
 
+char defaultRegionG[S3_MAX_REGION_SIZE];
+
 char defaultHostNameG[S3_MAX_HOSTNAME_SIZE];
 
 
@@ -68,13 +70,16 @@ typedef struct RequestComputedValues
     char canonicalizedAmzSignedHeaders[COMPACTED_METADATA_BUFFER_SIZE + 256 + 1];
 
     // All signed headers
-    char signedHeaders[COMPACTED_METADATA_BUFFER_SIZE + 256 + 1];
+    char signedHeaders[256];
 
-    // The x-amz-date
+    // The x-amz-date (ie: 20150912T021206Z or Sat, 12 Sep 2015 02:12:06 GMT)
     char amzHeaderDate[64];
 
     // Credential scope
     char credentialScope[128];
+
+    // Signed payload
+    char signedPayload[128];
 
     // URL-Encoded key
     char urlEncodedKey[MAX_URLENCODED_KEY_SIZE + 1];
@@ -356,13 +361,13 @@ static S3Status compose_amz_headers(const RequestParams *params,
     if (params->bucketContext.signVersion == S3SignatureV4)
     {
         strftime(values->amzHeaderDate, sizeof(values->amzHeaderDate), "%Y%m%dT%H%M%SZ", gmtime(&now));
+        headers_append(1, "x-amz-content-sha256: %s", "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855");
     }
     else
     {
         strftime(values->amzHeaderDate, sizeof(values->amzHeaderDate), "%a, %d %b %Y %H:%M:%S GMT", gmtime(&now));
     }
     headers_append(1, "x-amz-date: %s", values->amzHeaderDate);
-    headers_append(1, "x-amz-content-sha256: %s", "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855");
 
     if (params->httpRequestType == HttpRequestTypeCOPY) {
         // Add the x-amz-copy-source header
@@ -710,9 +715,8 @@ static void compose_scope_and_signed_header(const RequestParams *params,
 {
     char date[9];
     snprintf(date, sizeof(date), "%s", values->amzHeaderDate);
-    const char *region = params->bucketContext.region ? params->bucketContext.region : S3_DEFAULT_REGION;
-    snprintf(values->credentialScope, sizeof(values->credentialScope), 
-        "%s/%s/s3/aws4_request", date, region);
+    snprintf(values->credentialScope, sizeof(values->credentialScope), "%s/%s/s3/aws4_request", 
+        date, params->bucketContext.region ? params->bucketContext.region : defaultRegionG);
 
     int len = 0;
 #define signedHeaders_append(format, ...)                             \
@@ -796,6 +800,7 @@ static S3Status compose_sha1_auth_header(const RequestParams *params,
     snprintf(values->authorizationHeader, sizeof(values->authorizationHeader),
              "Authorization: AWS %s:%.*s", params->bucketContext.accessKeyId,
              b64Len, b64);
+    //printf("--signbuf--\n%s\n\n--authorizationHeader--\n%s\n\n", signbuf, values->authorizationHeader);
 
     return S3StatusOK;
 }
@@ -822,11 +827,10 @@ static void hash_canonical_request(unsigned char hashedCanonicalRequest[], const
     canonicalRequest_append("/%s\n", (values->urlEncodedKey && values->urlEncodedKey[0]) ? values->urlEncodedKey : ""); //CanonicalURI
     if (params->subResource && params->subResource[0]) {
         printf("params->subResource:%s\n", params->subResource);
-        canonicalRequest_append("%s=\n", params->subResource); //CanonicalQueryString
+        canonicalRequest_append("%s=", params->subResource); //CanonicalQueryString
     }
     else if (params->queryParams && params->queryParams[0]) {
-        printf("params->queryParams:%s\n", params->queryParams);
-        canonicalRequest_append("%s\n", params->queryParams); //CanonicalQueryString, must be sorted by key name
+        canonicalRequest_append("%s", params->queryParams); //CanonicalQueryString, must be sorted by key name
     }
     canonicalRequest_append("%s", "\n"); //CanonicalQueryString, must be sorted by key name
 
@@ -836,19 +840,23 @@ static void hash_canonical_request(unsigned char hashedCanonicalRequest[], const
     canonicalRequest_append("host:%s\n", params->bucketContext.hostName ? params->bucketContext.hostName : defaultHostNameG); //CanonicalHeaders
     canonicalRequest_append("%s\n", values->canonicalizedAmzHeaders); //AMZ CanonicalHeaders
     canonicalRequest_append("%s\n", values->signedHeaders); //SignedHeaders
-    canonicalRequest_append("%s", "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"); //Empty hashed payload
+    canonicalRequest_append("%s", values->signedPayload); //Empty hashed payload
 
     unsigned char sha256Request[32];
     SHA256Hash(sha256Request, (unsigned char *) canonicalRequest, strlen(canonicalRequest));
 
     Hex(hashedCanonicalRequest, 65, sha256Request, 32); //Lowercase base 16 encoding    
+    //printf("--canonicalRequest--\n%s\n\n--hashedCanonicalRequest--\n%s\n\n", 
+    //    canonicalRequest, hashedCanonicalRequest);
 
-    printf("--canonicalRequest--\n%s\n\n--hashedCanonicalRequest--\n%s\n\n", 
-        canonicalRequest, hashedCanonicalRequest);
+    //unsigned int i;
+    //for (i = 0; i < strlen(canonicalRequest); ++i) {
+    //    printf("%02x ", canonicalRequest[i]);
+    //}
 }
 
-// Composes the sha256 Authorization header for the request 
-static S3Status compose_sha256_auth_header(const RequestParams *params,
+
+static void compose_sha256_signature(unsigned char hashedSignature[], const RequestParams *params,
                                     RequestComputedValues *values)
 {
     // Hash Canonical Request
@@ -868,8 +876,7 @@ static S3Status compose_sha256_auth_header(const RequestParams *params,
     strToSign_append("%s\n", values->amzHeaderDate); //RequestDate
     strToSign_append("%s\n", values->credentialScope); //CredentialScope
     strToSign_append("%.*s", 64, hashedCanonicalRequest); //HashedCanonicalRequest
-    printf("--StringToSign--\n%s\n\n", strToSign);
-
+    //printf("--StringToSign--\n%s\n\n", strToSign);
     
     // Signing key
     // SigningKey = HMAC(HMAC(HMAC(HMAC("AWS4" + kSecret,"20110909"),"us-east-1"),"iam"),"aws4_request")
@@ -878,26 +885,35 @@ static S3Status compose_sha256_auth_header(const RequestParams *params,
     snprintf(aws4SecretKey, sizeof(aws4SecretKey), "AWS4%s", params->bucketContext.secretAccessKey);
     HMAC_SHA256(signingKey, (unsigned char *) aws4SecretKey, strlen(aws4SecretKey), 
         (unsigned char *) values->amzHeaderDate, 8); //only date
-    const char *region = params->bucketContext.region ? params->bucketContext.region : S3_DEFAULT_REGION;
+    const char *region = params->bucketContext.region ? params->bucketContext.region : defaultRegionG;
     HMAC_SHA256(signingKey, (unsigned char *) signingKey, 32, (unsigned char *) region, strlen(region));
     HMAC_SHA256(signingKey, (unsigned char *) signingKey, 32, (unsigned char *) "s3", strlen("s3"));
     HMAC_SHA256(signingKey, (unsigned char *) signingKey, 32, (unsigned char *) "aws4_request", strlen("aws4_request"));
-    printf("--signingKey--\n%.*s\n\n", 32, signingKey);
     
     // Signature
     // Signature = HMAC-SHA256(SigningKey, StringToSign)
     unsigned char signature[32];
     HMAC_SHA256(signature, (unsigned char *) signingKey, 32, (unsigned char *) strToSign, strToSignLen);
-    unsigned char hashedSignature[65];
-    Hex(hashedSignature, 65, signature, 32); //Lowercase base 16 encoding   
+    Hex(hashedSignature, 65, signature, 32); //Lowercase base 16 encoding
+}
 
+
+// Composes the sha256 Authorization header for the request 
+static S3Status compose_sha256_auth_header(const RequestParams *params,
+                                    RequestComputedValues *values)
+{
+    sprintf(values->signedPayload, "%s", "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855");
+
+    unsigned char hashedSignature[65];
+    compose_sha256_signature(hashedSignature, params, values); //Lowercase base 16 encoding
+    
     //Authorization: algorithm Credential=access key ID/credential scope, SignedHeaders=SignedHeaders, Signature=signature
     //Authorization: AWS4-HMAC-SHA256 Credential=AKIDEXAMPLE/20110909/us-east-1/iam/aws4_request, 
     //SignedHeaders=content-type;host;x-amz-date, Signature=ced6826de92d2bdeed8f846f0bf508e8559e98e4b0199114b84c54174deb456c
     snprintf(values->authorizationHeader, sizeof(values->authorizationHeader),
         "Authorization: AWS4-HMAC-SHA256 Credential=%s/%s, SignedHeaders=%s, Signature=%s", 
         params->bucketContext.accessKeyId, values->credentialScope, values->signedHeaders, hashedSignature);
-    printf("--authorizationHeader--\n%s\n\n", values->authorizationHeader);
+    //printf("--authorizationHeader--\n%s\n\n", values->authorizationHeader);
     
     return S3StatusOK;
 }
@@ -1249,7 +1265,7 @@ static void request_release(Request *request)
 
 
 S3Status request_api_initialize(const char *userAgentInfo, int flags,
-                                const char *defaultHostName)
+                                const char *defaultS3Region, const char *defaultHostName)
 {
     if (curl_global_init(CURL_GLOBAL_ALL & 
                          ~((flags & S3_INIT_WINSOCK) ? 0 : CURL_GLOBAL_WIN32))
@@ -1257,8 +1273,17 @@ S3Status request_api_initialize(const char *userAgentInfo, int flags,
         return S3StatusInternalError;
     }
 
+    if (!defaultS3Region) {
+        defaultS3Region = S3_DEFAULT_REGION;
+    }
+
     if (!defaultHostName) {
         defaultHostName = S3_DEFAULT_HOSTNAME;
+    }
+
+    if (snprintf(defaultRegionG, S3_MAX_REGION_SIZE, 
+                 "%s", defaultS3Region) >= S3_MAX_REGION_SIZE) {
+        return S3StatusUriTooLong;
     }
 
     if (snprintf(defaultHostNameG, S3_MAX_HOSTNAME_SIZE, 
@@ -1348,7 +1373,7 @@ void request_perform(const RequestParams *params, S3RequestContext *context)
                           params->subResource, computed.urlEncodedKey,
                           computed.canonicalizedResource);
 
-    // Compose scope
+    // Compose scope and signed header
     compose_scope_and_signed_header(params, &computed);
 
     // Compose Authorization header
@@ -1498,9 +1523,7 @@ S3Status request_curl_code_to_status(CURLcode code)
     }
 }
 
-
-S3Status S3_generate_authenticated_query_string
-    (char *buffer, const S3BucketContext *bucketContext,
+S3Status generate_sha1_auth_query_string(char *buffer, const S3BucketContext *bucketContext,
      const char *key, int64_t expires, const char *resource)
 {
 #define MAX_EXPIRES (((int64_t) 1 << 31) - 1)
@@ -1577,4 +1600,127 @@ S3Status S3_generate_authenticated_query_string
 
     return compose_uri(buffer, S3_MAX_AUTHENTICATED_QUERY_STRING_SIZE,
                        bucketContext, urlEncodedKey, resource, queryParams);
+}
+
+
+S3Status generate_sha256_auth_query_string(char *buffer, const S3BucketContext *bucketContext,
+     const char *key, int64_t expires, const char *resource)
+{
+#define MAX_SHA256_EXPIRES  60 * 60 * 24 * 7 // seven days
+    // Provides the time period, in seconds, for which the generated presigned URL is valid.
+    // For example, 86400 (24 hours). This value is an integer. The minimum value you can set is 1, 
+    // and the maximum is 604800 (seven days).
+    if (expires < 0) {
+        expires = MAX_SHA256_EXPIRES;
+    }
+    else if (expires > MAX_SHA256_EXPIRES) {
+        expires = MAX_SHA256_EXPIRES;
+    }
+    RequestParams params =
+    {
+        HttpRequestTypeGET,                           // httpRequestType
+        { bucketContext->hostName,                    // hostName
+          bucketContext->bucketName,                  // bucketName
+          bucketContext->protocol,                    // protocol
+          bucketContext->uriStyle,                    // uriStyle
+          bucketContext->signVersion,                    // signVersion
+          bucketContext->region,                    // region
+          bucketContext->accessKeyId,                 // accessKeyId
+          bucketContext->secretAccessKey,             // secretAccessKey
+          bucketContext->securityToken },             // securityToken
+        key,                                              // key
+        0,            // queryParams
+        resource,                                             // subResource
+        0,                                            // copySourceBucketName
+        0,                                            // copySourceKey
+        0,                                            // getConditions
+        0,                                            // startByte
+        0,                                            // byteCount
+        0,                                            // putProperties
+        0,                // propertiesCallback
+        0,                                            // toS3Callback
+        0,                                            // toS3CallbackTotalSize
+        0,                    // fromS3Callback
+        0,                // completeCallback
+        0                                         // callbackData
+    };
+    
+    // These will hold the computed values
+    RequestComputedValues computed;
+    S3Status status;
+
+    // Validate the bucket name
+    if (params.bucketContext.bucketName && 
+        ((status = S3_validate_bucket_name
+          (params.bucketContext.bucketName, 
+           params.bucketContext.uriStyle)) != S3StatusOK)) {
+        return status;
+    }
+
+    // Add the x-amz-date header
+    time_t now = time(NULL);
+    strftime(computed.amzHeaderDate, sizeof(computed.amzHeaderDate), "%Y%m%dT%H%M%SZ", gmtime(&now));
+    sprintf(computed.canonicalizedAmzHeaders, "%s", "x-amz-content-sha256:\nx-amz-date:\n");
+    sprintf(computed.canonicalizedAmzSignedHeaders, "%s", "x-amz-content-sha256;x-amz-date");
+
+    // Compose standard headers
+    if ((status = compose_standard_headers
+         (&params, &computed)) != S3StatusOK) {
+        return status;
+    }
+
+    // URL encode the key
+    if ((status = encode_key(&params, &computed)) != S3StatusOK) {
+        return status;
+    }
+
+    // Compose scope and signed header
+    compose_scope_and_signed_header(&params, &computed);
+
+    char encodedSignedHeader[strlen(computed.signedHeaders) * 3];
+    urlEncode(encodedSignedHeader, computed.signedHeaders, strlen(computed.signedHeaders));
+
+    sprintf(computed.signedPayload, "%s", "UNSIGNED-PAYLOAD");
+    
+    // AKIAIOSFODNN7EXAMPLE%2F20130524%2Fus-east-1%2Fs3%2Faws4_request
+    char encodedCredentialScope[sizeof(computed.credentialScope) * 3];
+    snprintf(encodedCredentialScope, sizeof(encodedCredentialScope), 
+        "%s%%2F%.*s%%2F%s%%2Fs3%%2Faws4_request", 
+        bucketContext->accessKeyId, 8, computed.amzHeaderDate, 
+        bucketContext->region ? bucketContext->region : defaultRegionG);
+    
+    char tmpQueryParams[S3_MAX_SHA256_AUTH_QUERY_STRING_SIZE];
+    snprintf(tmpQueryParams, S3_MAX_SHA256_AUTH_QUERY_STRING_SIZE, "X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=%s"
+        "&X-Amz-Date=%s&X-Amz-Expires=%ld&X-Amz-SignedHeaders=%s",
+        encodedCredentialScope, computed.amzHeaderDate, (long) expires, encodedSignedHeader);
+    params.queryParams = tmpQueryParams;
+    
+    unsigned char hashedSignature[65];
+    compose_sha256_signature(hashedSignature, &params, &computed); //Lowercase base 16 encoding
+
+    char queryParams[S3_MAX_SHA256_AUTH_QUERY_STRING_SIZE];
+    snprintf(queryParams, S3_MAX_SHA256_AUTH_QUERY_STRING_SIZE, 
+        "%s&X-Amz-Signature=%s", tmpQueryParams, hashedSignature);
+
+    //https://s3.amazonaws.com/examplebucket/test.txt
+    //?X-Amz-Algorithm=AWS4-HMAC-SHA256
+    //&X-Amz-Credential=AKIAIOSFODNN7EXAMPLE%2F20130524%2Fus-east-1%2Fs3%2Faws4_request
+    //&X-Amz-Date=20130524T000000Z&X-Amz-Expires=86400&X-Amz-SignedHeaders=host
+    //&X-Amz-Signature=<signature-value>
+    return compose_uri(buffer, S3_MAX_SHA256_AUTH_QUERY_STRING_SIZE,
+                       bucketContext, computed.urlEncodedKey, resource, queryParams);
+}
+
+S3Status S3_generate_authenticated_query_string
+    (char *buffer, const S3BucketContext *bucketContext,
+     const char *key, int64_t expires, const char *resource)
+{
+    if (bucketContext->signVersion == S3SignatureV4)
+    {
+        return generate_sha256_auth_query_string(buffer, bucketContext, key, expires, resource);
+    }
+    else
+    {
+        return generate_sha1_auth_query_string(buffer, bucketContext, key, expires, resource);
+    }
 }
