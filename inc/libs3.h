@@ -720,7 +720,8 @@ typedef struct S3BucketContext
     S3SignatureVersion signVersion;
 
     /**
-     * The region of the host to use when using S3SignatureV4
+     * The region of the host to use when using S3SignatureV4.  If set to
+     * NULL, the default S3 region passed in to S3_initialize will be used.
      **/
     const char *region;
 

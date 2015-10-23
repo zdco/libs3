@@ -207,7 +207,7 @@ static void usageExit(FILE *out)
 "   S3_ACCESS_KEY_ID     : S3 access key ID (required)\n"
 "   S3_SECRET_ACCESS_KEY : S3 secret access key (required)\n"
 "   S3_HOSTNAME          : specify alternative S3 host (optional)\n"
-"   S3_REGION          : specify alternative S3 region (optional)\n"
+"   S3_REGION            : specify alternative S3 region (optional)\n"
 "\n" 
 " Commands (with <required parameters> and [optional parameters]) :\n"
 "\n"
